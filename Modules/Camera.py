@@ -1,8 +1,11 @@
+"""
+For handling most of the camera related tasks.
+Provided a class for the CaptureDevice
+"""
 from typing import Union
 import cv2
 import numpy as np
 from multiprocessing import Process,Queue
-
 
 
 class CaptureDevice():
@@ -19,8 +22,10 @@ class CaptureDevice():
         
         self.DEVICE = device
         self.FPS = fps
-        self.ROTATION = rotation
-        print(self.ROTATION)
+        if rotation: # Convert rotation to cv2.rotation
+            self.ROTATION = (rotation % 4) - 1  # 1,2,3 -> 0,1,2
+        else:
+            self.ROTATION = None
         self._FrameQueue = Queue(1)
         self.ENABLE = True
         self.RESOLUTION = image.shape[:2]
@@ -47,6 +52,7 @@ class CaptureDevice():
                 # Resize if the frame needs to be resized
                 if image.shape[:2] != self.RESOLUTION: 
                     image = cv2.resize(image,self.RESOLUTION)
+                cv2.imshow('Camera',image)
                 
                 try:
                     self._FrameQueue.put_nowait(image)

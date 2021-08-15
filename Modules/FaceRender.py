@@ -1,3 +1,7 @@
+"""
+A submodule for handling facial caluculations and rendering
+"""
+
 from typing import List
 import cv2
 import time
