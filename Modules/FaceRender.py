@@ -4,29 +4,30 @@ A submodule for handling facial caluculations and rendering
 
 from typing import List
 import cv2
+import colorsys
 import time
 import numpy as np
 import face_recognition as fr
-from PIL import Image
+from PIL import ImageColor
 
 FeaturesConv = {
-    "left_eyebrow":"eyebrow",
-    "right_eyebrow":"eyebrow",
-    "left_eye":"eye",
-    "right_eye":"eye",
-    "nose_bridge":"nose",
-    "nose_tip":"nose",
-    "top_lip":"lip",
-    "bottom_lip":"lip",
-    "chin":"chin",
+    "left_eyebrow"  : "eyebrow",
+    "right_eyebrow" : "eyebrow",
+    "left_eye"      : "eye",
+    "right_eye"     : "eye",
+    "nose_bridge"   : "nose",
+    "nose_tip"      : "nose",
+    "top_lip"       : "lip",
+    "bottom_lip"    : "lip",
+    "chin"          : "chin",
 }
 
 FeatureColours ={
-    "eyebrow":[0,0,255],
-    "eye"    :[0,127,127],
-    "nose"   :[0,255,0],
-    "lip"    :[127,127,0],
-    "chin"   :[255,0,0]
+    "eyebrow" : "#7518B8",
+    "eye"     : "#B53E6F",
+    "nose"    : "#1FDB8D",
+    "lip"     : "#884FB0",
+    "chin"    : "#C2115B",
 }
 
 class FaceMapping:
@@ -52,33 +53,48 @@ def Calculate(image:np.ndarray,*,downscale=2) -> List[FaceMapping]:
 
 def Render(locations:List[FaceMapping],*,res:tuple=None,image:np.ndarray=None)->np.ndarray:
     if image is None:
-        image = np.full((res[1],res[0],3),0,dtype=np.uint8)
+        image = np.zeros((res[1],res[0],3),dtype=np.uint8)
     else:
         image = image
-    
+
+    AllPoints = []
     for x,face in enumerate(locations):
         Mappings = face.mappings
         for name,points in Mappings.items():
+            Feature = FeaturesConv[name]
             NewPoints = []
             for point in points:
                 NewPoints.append(np.array(point)*face.downscale)
-            
-            if x == 0:
-                clr = FeatureColours[FeaturesConv[name]]
-            else:
-                clr = (255,255,255)
-            if name == 'chin':
+                
+            AllPoints.extend(NewPoints)
+            clr = FeatureColours[Feature]
+            if isinstance(clr,str): # If a hex string is provided
+                clr = clr[-6:] # Normalise without the #
+                clr = ImageColor.getrgb("#"+clr) # Convert to RGB
+
+            if Feature == "chin":
                 image = cv2.polylines(image,[np.array(NewPoints)],
-                    color=clr,
-                    isClosed= False,
-                    thickness=2
-                    )
+                            color=clr,
+                            isClosed=False,
+                            thickness=4,
+                            lineType=cv2.LINE_AA
+                        )
+                
+            elif Feature == 'eye':
+                image = cv2.polylines(image,[np.array(NewPoints)],
+                            color=clr,
+                            isClosed= True,
+                            thickness=1,
+                            lineType=cv2.LINE_AA
+                        )
             else:
                 image = cv2.fillPoly(image,[np.array(NewPoints)],
                             color = clr,
                             lineType=cv2.LINE_AA
-                            )
-    
+                        )
+                
+    for point in AllPoints:
+        image = cv2.circle(image,tuple(point),2,(255,255,255),-1)
     return image
 
 

@@ -5,34 +5,41 @@ Provided a class for the CaptureDevice
 from typing import Union
 import cv2
 import numpy as np
-from multiprocessing import Process,Queue
+import multiprocessing as mp
 
 
 class CaptureDevice():
-    def __init__(self,device:Union[str,int],*,fps=30,downscale=None,rotation=None):
+    def __init__(self,device:Union[str,int],*,fps:int,rotation:int,show:bool):
+        self.DEVICE = device
+        self.FPS = fps
+        self.FRAMETIME = 1000//fps
+        self.SHOW = show
+        self.ENABLE = True
+        rotation = (rotation % 360)
+        self._FrameQueue = mp.Queue(1)
+        if rotation: # Convert rotation to cv2.rotation
+            self.ROTATION = (rotation // 90) - 1 # 90,180,270 = 0,1,2
+        else:
+            self.ROTATION = None
+        
         print('Checking Capture Device')
         cap = cv2.VideoCapture(device)
         ret,image = cap.read()
+        
         if ret:
             print('Capture Device OK')
             cap.release()
         else:
             print('Capture Device Error')
             exit()
+
+        if self.ROTATION:
+            cv2.rotate(image,self.ROTATION)
         
-        self.DEVICE = device
-        self.FPS = fps
-        if rotation: # Convert rotation to cv2.rotation
-            self.ROTATION = (rotation % 4) - 1  # 1,2,3 -> 0,1,2
-        else:
-            self.ROTATION = None
-        self._FrameQueue = Queue(1)
-        self.ENABLE = True
         self.RESOLUTION = image.shape[:2]
-        if downscale:
-            self.RESOLUTION = self.RESOLUTION[0]//downscale,self.RESOLUTION[1]//downscale
-        
-        Process(target=self._FrameCapture).start()
+        self.WIDTH = self.RESOLUTION[0]
+        self.HEIGHT = self.RESOLUTION[1]
+        mp.Process(target=self._FrameCapture).start()
         
     
     def _FrameCapture(self) -> None:
@@ -49,17 +56,17 @@ class CaptureDevice():
                 if self.ROTATION != None:
                     image = cv2.rotate(image,self.ROTATION)
 
-                # Resize if the frame needs to be resized
-                if image.shape[:2] != self.RESOLUTION: 
-                    image = cv2.resize(image,self.RESOLUTION)
-                cv2.imshow('Camera',image)
-                
+                # TODO: Prevent skipped frames
                 try:
                     self._FrameQueue.put_nowait(image)
-                except:
+                except Exception:
                     pass
+                
+                if self.SHOW:
+                    cv2.imshow('Camera',image)
         finally:
             cap.release()
+            self.ENABLE = False
 
     @property
     def image(self) -> np.ndarray:
