@@ -1,8 +1,8 @@
+import os
 from Modules import FaceRender,Camera,Delay
 import cv2
 import time
 import argparse
-import pyfakewebcam
 import numpy as np
 from prettytable import PrettyTable 
 from multiprocessing import Process, Queue
@@ -10,34 +10,36 @@ from multiprocessing import Process, Queue
 ArgParser = argparse.ArgumentParser()
    
 ArgParser.add_argument("-c","--camera",   type=int, default=0,    help="Device number of the camera to use")
-ArgParser.add_argument("-o","--output",   type=int, default=None, help="Device number of the camera to output")
-ArgParser.add_argument("-f","--fps",      type=int, default=30,   help="Frames per second of the video")
+ArgParser.add_argument("-f","--fps",      type=int, default=15,   help="Frames per second of the video")
 ArgParser.add_argument("-r","--rotation", type=int, default=0,    help="Rotation of the camera in 90\u00B0 increments.")
 ArgParser.add_argument("-d","--downscale",type=int, default=2,    help="How much to downscale the video before calculations, lower is faster but less accurate")
 ArgParser.add_argument("-b","--buffer",   type=int, default=2,    help="Buffer size for facial detection, helps to reduce jitter but increases latency")
-ArgParser.add_argument("-s","--show",     type=bool,default=False,help="Display the live camera feed")
 args =  vars(ArgParser.parse_args())
 
 
-DEVICE = Camera.CaptureDevice(args['camera'],
-    fps=args['fps'],
-    rotation=args["rotation"],
-    show=args['show']
-    )
-
+CAMERA = args["camera"]
+ROTATION = args["rotation"]
+FPS = args["fps"]
 DOWNSCALE = args["downscale"]
 FRAMEBUFFER = args["buffer"]
-if args["output"]:
-    FAKEWEBCAM = pyfakewebcam.FakeWebcam(f'/dev/video{args["output"]}',DEVICE.WIDTH,DEVICE.HEIGHT)
+
+DEVICE = Camera.CaptureDevice(
+    device=CAMERA,
+    fps=FPS,
+    rotation=ROTATION,
+)
+
 
 def CaptureFaceLandmarks(queue:Queue):
     Timer = Delay.Timer(DEVICE.FRAMETIME)
     while DEVICE.ENABLE:
-        image = DEVICE.image
-        FaceCalculation = FaceRender.Calculate(image=image,downscale=DOWNSCALE)
+        FaceCalculation = FaceRender.Calculate(
+            image=DEVICE.image,
+            downscale=DOWNSCALE
+        )
         if FaceCalculation:
             if queue.full():
-                queue.get()
+                queue.get() # Remove 
             queue.put(FaceCalculation)
         Timer()
 
@@ -51,9 +53,7 @@ Frames = [q.get(),q.get()]
 Timer = Delay.Timer(DEVICE.FRAMETIME)
 frameTypes = [' ' for x in range(DEVICE.FPS)]
 frameTimes = [ 0  for x in range(DEVICE.FPS)]
-print("\033[s") # Saves cursor position
 while DEVICE.ENABLE and cv2.waitKey(1000//DEVICE.FPS):
-    print("\033[u") # Loads cursor position
     start = time.time()
     
     # Face Generation
@@ -69,10 +69,7 @@ while DEVICE.ENABLE and cv2.waitKey(1000//DEVICE.FPS):
         Frames[1] = face # Set face as new frame
 
     image = FaceRender.Render(face,res=DEVICE.RESOLUTION) # Render frame
-    if args["output"]:
-        FAKEWEBCAM.schedule_frame(image) # Put frame on webcam
-    else:
-        cv2.imshow('Render',image) # Display frame
+    cv2.imshow('Render',image) # Display frame
 
     # --------------- Stats -------------- #
     # Interpolation Ration
@@ -92,7 +89,7 @@ while DEVICE.ENABLE and cv2.waitKey(1000//DEVICE.FPS):
     StatTable.horizontal_char = "\u2501"
     StatTable.vertical_char = "\u2503"
     StatTable.add_rows((
-            (    'Resolution:' ,f"{DEVICE.WIDTH},{DEVICE.HEIGHT}"),
+            (    'Resolution:' ,f"{DEVICE.WIDTH}x{DEVICE.HEIGHT}"),
             (           'FPS:' ,f"{DEVICE.FPS}"),
             (  'Frame Source:' ,''.join(frameTypes)),
             ('',''),
@@ -100,6 +97,7 @@ while DEVICE.ENABLE and cv2.waitKey(1000//DEVICE.FPS):
             (    'Frame Time:' ,f"{frametime:.2f} ms"),
             ('Avg Frame Time:' ,f"{avgFrameTime:.2f} ms")
         ))
+    os.system("clear") # Clear the terminal
     print(StatTable)
 
     Timer()

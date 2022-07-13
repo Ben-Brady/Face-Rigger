@@ -9,36 +9,43 @@ import multiprocessing as mp
 
 
 class CaptureDevice():
-    def __init__(self,device:Union[str,int],*,fps:int,rotation:int,show:bool):
+    DEVICE: Union[str,int]
+    FPS: int
+    FRAMETIME: int
+    ENABLE: bool
+    _FrameQueue: mp.Queue
+    
+    def __init__(self,device:Union[str,int],*,fps:int,rotation:int):
         self.DEVICE = device
         self.FPS = fps
         self.FRAMETIME = 1000//fps
-        self.SHOW = show
         self.ENABLE = True
-        rotation = (rotation % 360)
         self._FrameQueue = mp.Queue(1)
-        if rotation: # Convert rotation to cv2.rotation
-            self.ROTATION = (rotation // 90) - 1 # 90,180,270 = 0,1,2
-        else:
+        
+        rotation %= 360
+        if rotation == 0: # Convert rotation to cv2.rotation
             self.ROTATION = None
+        else:
+            self.ROTATION = (rotation // 90) - 1 # 90,180,270 = 0,1,2
+        
         
         print('Checking Capture Device')
         cap = cv2.VideoCapture(device)
         ret,image = cap.read()
         
-        if ret:
-            print('Capture Device OK')
-            cap.release()
-        else:
+        if ret == False:
             print('Capture Device Error')
             exit()
+        
+        print('Capture Device OK')
+        cap.release()
 
         if self.ROTATION:
             cv2.rotate(image,self.ROTATION)
         
         self.RESOLUTION = image.shape[:2]
-        self.WIDTH = self.RESOLUTION[0]
-        self.HEIGHT = self.RESOLUTION[1]
+        self.WIDTH = self.RESOLUTION[1]
+        self.HEIGHT = self.RESOLUTION[0]
         mp.Process(target=self._FrameCapture).start()
         
     
@@ -56,14 +63,10 @@ class CaptureDevice():
                 if self.ROTATION != None:
                     image = cv2.rotate(image,self.ROTATION)
 
-                # TODO: Prevent skipped frames
                 try:
                     self._FrameQueue.put_nowait(image)
                 except Exception:
                     pass
-                
-                if self.SHOW:
-                    cv2.imshow('Camera',image)
         finally:
             cap.release()
             self.ENABLE = False

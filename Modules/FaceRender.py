@@ -53,7 +53,7 @@ def Calculate(image:np.ndarray,*,downscale=2) -> List[FaceMapping]:
 
 def Render(locations:List[FaceMapping],*,res:tuple=None,image:np.ndarray=None)->np.ndarray:
     if image is None:
-        image = np.zeros((res[1],res[0],3),dtype=np.uint8)
+        image = np.zeros((res[0],res[1],3),dtype=np.uint8)
     else:
         image = image
 
